@@ -39,6 +39,9 @@ MyFirstProject/
 │   ├── server.js          # Main server, redaction & re-injection logic
 │   ├── utils/
 │   │   └── luhn.js        # Luhn algorithm utility
+│   ├── __tests__/
+│   │   ├── luhn.test.js       # Luhn unit tests
+│   │   └── redaction.test.js  # All PII types, re-injection, false positives
 │   ├── .env.example       # Copy to .env and add your OpenAI key
 │   └── package.json
 ├── frontend/              # React + Vite dashboard
@@ -160,6 +163,42 @@ Passport A12345678 was issued in Riyadh on 01/01/2020.
 | Redaction pipeline | Fully functional | Fully functional |
 | Response time | Instant | 1–3 seconds |
 | Cost | Free | ~$0.01/request (gpt-4o) |
+
+---
+
+## Testing
+
+The backend has a full Jest test suite covering all PII types, the Luhn algorithm, re-injection, and false positive defence.
+
+### Run the tests
+
+```bash
+cd backend
+npm test
+```
+
+### What's covered — 44 tests across 9 suites
+
+| Suite | Tests | What it verifies |
+|---|---|---|
+| **Luhn algorithm** | 9 | Valid IDs pass, invalid/fake IDs fail, edge cases |
+| **National ID** | 6 | Luhn gate, wrong length/prefix ignored |
+| **Phone numbers** | 6 | All 5 formats (`+966` spaces, hyphens, compact, local) |
+| **IBAN** | 4 | Compact, spaced, in-sentence, non-SA IBANs ignored |
+| **Email** | 3 | Standard, `.com.sa` domains, multiple addresses |
+| **Passport** | 3 | Keyword required, case-insensitive keyword match |
+| **Names** | 7 | All title/field triggers, Arabic particles, no false positives |
+| **Re-injection** | 3 | Single token, multiple types, no-token passthrough |
+| **False positives** | 3 | Invoice/transaction IDs left untouched |
+
+### Test files
+
+```
+backend/
+└── __tests__/
+    ├── luhn.test.js       # Luhn algorithm unit tests
+    └── redaction.test.js  # All PII types, re-injection, false positives
+```
 
 ---
 
