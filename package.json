@@ -1,0 +1,13 @@
+{
+  "name": "sovereign-prompt",
+  "version": "1.0.0",
+  "description": "Privacy-preserving LLM proxy for the Saudi Arabian market",
+  "private": true,
+  "scripts": {
+    "install:all": "npm install --prefix backend && npm install --prefix frontend",
+    "dev:backend": "npm run dev --prefix backend",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "start:backend": "npm run start --prefix backend",
+    "start:frontend": "npm run preview --prefix frontend"
+  }
+}
