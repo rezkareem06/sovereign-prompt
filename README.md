@@ -4,6 +4,8 @@ A privacy-preserving LLM proxy built for the Saudi Arabian market. Intercepts pr
 
 Built as an MVP to demonstrate PDPL (Personal Data Protection Law) compliance for enterprise LLM adoption.
 
+**Live demo:** https://sovereignprompt.netlify.app
+
 ---
 
 ## How It Works
