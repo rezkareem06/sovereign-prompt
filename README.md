@@ -130,7 +130,7 @@ Recommended: **Railway** (backend) + **Vercel** (frontend). Both have free tiers
 
 **All six PII types in one prompt:**
 ```
-employee: Ahmed Al-Rashidi, ID 1045238912, passport A12345678,
+employee: Ahmed Al-Rashidi, ID 1000000388, passport A12345678,
 IBAN SA4420000001234567891234, +966 50 123 4567, ahmed@company.com.sa
 ```
 
@@ -141,7 +141,7 @@ Please update the records for Mr. Mohammed Abdullah and Dr. Fatima Al-Zahrani.
 
 **Multiple IDs:**
 ```
-Transfer the case from citizen 1045238912 to resident 2176543890.
+Transfer the case from citizen 1000000388 to resident 2000000097.
 ```
 
 **Passport (keyword required):**

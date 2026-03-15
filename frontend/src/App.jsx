@@ -111,7 +111,7 @@ export default function App() {
     {
       role: 'assistant',
       content:
-        "مرحباً! I'm Sovereign Prompt — your privacy-preserving LLM proxy.\n\nTry sending a message that contains a Saudi National ID, for example:\n\n\"Please process the file for employee ID 1045238912 and update their records.\"\n\nWatch the Security Terminal on the right to see how the ID is redacted before it ever leaves your network.",
+        "مرحباً! I'm Sovereign Prompt — your privacy-preserving LLM proxy.\n\nTry sending a message that contains a Saudi National ID, for example:\n\n\"Please process the file for employee ID 1000000388 and update their records.\"\n\nWatch the Security Terminal on the right to see how the ID is redacted before it ever leaves your network.",
     },
   ]);
   const [input, setInput] = useState('');
@@ -274,7 +274,7 @@ export default function App() {
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder='Try: "Process file for employee 1045238912"'
+              placeholder='Try: "Process file for employee 1000000388"'
               className="flex-1 bg-transparent text-sm text-gray-700 placeholder-gray-400 outline-none"
               disabled={loading}
             />

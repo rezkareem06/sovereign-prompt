@@ -2,12 +2,10 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const OpenAI = require('openai');
-// NOTE: luhnCheck is kept as a utility but NOT used to gate KSA ID redaction.
-// Saudi National IDs do not use the Luhn (Mod-10) checksum — that algorithm
-// is designed for credit cards. Applying it here caused every real KSA ID to
-// fail validation and be silently skipped. Pattern matching alone is the
-// correct approach for 10-digit IDs beginning with 1 (citizen) or 2 (resident).
-const { luhnCheck } = require('./utils/luhn'); // eslint-disable-line no-unused-vars
+// Saudi National IDs and Iqamas use the Luhn (Mod-10) algorithm.
+// Luhn guards against false positives — without it, 10-digit invoice numbers,
+// transaction IDs, and routing numbers starting with 1 or 2 would be redacted.
+const { luhnCheck } = require('./utils/luhn');
 
 const app = express();
 app.use(cors({
@@ -18,7 +16,7 @@ app.use(express.json());
 // ---------------------------------------------------------------------------
 // Token Vault — in-memory map for this request's redacted IDs
 // Key:   token string  e.g. "[KSA_ID_1]"
-// Value: original ID   e.g. "1045238912"
+// Value: original ID   e.g. "1000000388"
 // ---------------------------------------------------------------------------
 const tokenVault = new Map();
 
@@ -74,8 +72,9 @@ function redactPrompt(prompt) {
     return token;
   });
 
-  // Pass 2: National IDs
+  // Pass 2: National IDs — Luhn validates it's a real ID, not an invoice/transaction number
   sanitized = sanitized.replace(KSA_ID_REGEX, (match) => {
+    if (!luhnCheck(match)) return match; // fails checksum — not a real ID, leave it
     idCounter++;
     const token = `[KSA_ID_${idCounter}]`;
     tokenVault.set(token, match);
