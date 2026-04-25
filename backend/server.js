@@ -1,11 +1,22 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const multer = require('multer');
+const pdfParse = require('pdf-parse/lib/pdf-parse');
 const OpenAI = require('openai');
 // Saudi National IDs and Iqamas use the Luhn (Mod-10) algorithm.
 // Luhn guards against false positives — without it, 10-digit invoice numbers,
 // transaction IDs, and routing numbers starting with 1 or 2 would be redacted.
 const { luhnCheck } = require('./utils/luhn');
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype === 'application/pdf') cb(null, true);
+    else cb(new Error('Only PDF files are accepted.'));
+  },
+});
 
 const app = express();
 app.use(cors({
@@ -46,9 +57,11 @@ const PASSPORT_KEYWORD_RE = /passport/i;
 
 // Names: keyword-triggered only — regex cannot safely detect arbitrary names
 // without unacceptable false-positive rates on normal text.
-// Triggers: titles (Mr/Mrs/Ms/Miss/Dr/Prof) or field labels (Name:, Employee:, etc.)
-// Captures 1–3 name parts, including common Arabic particles (Al-, Bin, Bint, Abu, Abdul).
-const NAME_TRIGGER_REGEX = /(?:(?:Mr|Mrs|Ms|Miss|Dr|Prof)\.?\s+|(?:[Nn]ame|[Ff]ull\s[Nn]ame|[Ee]mployee|[Pp]atient|[Rr]esident|[Cc]ustomer|[Cc]itizen|[Aa]pplicant|[Oo]wner):\s*)([A-Z][a-zA-Z'-]+(?:\s+(?:(?:Al|El|Bin|Bint|Abu|Umm|Abdul|Abdel)-?\s*)?[A-Z][a-zA-Z'-]+){0,2})/g;
+// Triggers: titles (Mr/Mrs/Ms/Miss/Dr/Prof/Sir) OR field labels with colons
+// OR sentence phrases ("my name is", "named", "called").
+// Captures 1–3 name parts, including Arabic particles (Al-, Bin, etc.) and
+// Western lowercase particles (van, de, von, del, etc.).
+const NAME_TRIGGER_REGEX = /(?:(?:Mr|Mrs|Ms|Miss|Dr|Prof|Sir|Madam)\.?\s+|(?:[Nn]ame|[Ff]ull\s+[Nn]ame|[Ee]mployee|[Pp]atient|[Rr]esident|[Cc]ustomer|[Cc]lient|[Cc]itizen|[Aa]pplicant|[Oo]wner|[Cc]ontact|[Ss]taff|[Uu]ser|[Pp]erson|[Ii]ndividual|[Ss]ubject|[Ss]ender|[Rr]ecipient|[Aa]uthor|[Aa]gent|[Rr]epresentative):\s*|(?:my|his|her|their|your|our)\s+name\s+is\s+|(?:named|called)\s+)([A-Z][a-zA-Z'-]+(?:\s+(?:(?:Al|El|Bin|Bint|Abu|Umm|Abdul|Abdel)-?\s*|(?:van|de|von|del|della|da|di|du|le|la|den|der|des)\s+)?[A-Z][a-zA-Z'-]+){0,2})/g;
 
 // ---------------------------------------------------------------------------
 // Redaction — replaces all PII types with typed tokens.
@@ -216,6 +229,47 @@ app.post('/api/chat', async (req, res) => {
     finalResponse,
     sanitizedPayloadSentToLLM,
     sanitizedResponseFromLLM,
+  });
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/upload  — PDF redaction audit (no LLM call)
+// ---------------------------------------------------------------------------
+app.post('/api/upload', upload.single('pdf'), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'A PDF file is required.' });
+  }
+
+  console.log('\n─────────────────────────────────────────');
+  console.log(`[PDF UPLOAD] ${req.file.originalname} (${(req.file.size / 1024).toFixed(1)} KB)`);
+
+  let pdfData;
+  try {
+    pdfData = await pdfParse(req.file.buffer);
+  } catch (err) {
+    console.error('[PDF PARSE ERROR]', err.message);
+    return res.status(422).json({ error: 'Could not parse PDF. The file may be corrupted or password-protected.' });
+  }
+
+  const originalText = pdfData.text.trim();
+  if (!originalText) {
+    return res.status(422).json({
+      error: 'No text found in this PDF. Scanned (image-only) PDFs are not yet supported.',
+    });
+  }
+
+  const redactedText = redactPrompt(originalText);
+  const redactions = [...tokenVault.entries()].map(([token, original]) => ({ token, original }));
+
+  console.log(`[PDF] ${pdfData.numpages} page(s), ${redactions.length} redaction(s)`);
+  console.log('─────────────────────────────────────────\n');
+
+  res.json({
+    originalText,
+    redactedText,
+    redactions,
+    pageCount: pdfData.numpages,
+    fileName: req.file.originalname,
   });
 });
 

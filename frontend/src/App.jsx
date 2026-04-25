@@ -8,9 +8,12 @@ import {
   AlertCircle,
   CheckCircle2,
   Lock,
+  Paperclip,
+  FileText,
 } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api/chat';
+const UPLOAD_URL = import.meta.env.VITE_UPLOAD_URL || 'http://localhost:3001/api/upload';
 
 // ---------------------------------------------------------------------------
 // Sub-components
@@ -122,6 +125,7 @@ export default function App() {
 
   const chatEndRef = useRef(null);
   const inputRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -183,6 +187,69 @@ export default function App() {
       setLogs((prev) => [
         ...prev,
         { label: 'Pipeline Error', content: msg, highlight: false, stepNumber: 'error' },
+      ]);
+    } finally {
+      setLoading(false);
+      inputRef.current?.focus();
+    }
+  };
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+
+    setError(null);
+    setLoading(true);
+    setRequestCount((c) => c + 1);
+    setMessages((prev) => [...prev, { role: 'user', content: `Uploaded PDF: ${file.name}` }]);
+    setLogs([{
+      label: '1. PDF Received by Proxy',
+      content: `${file.name} — ${(file.size / 1024).toFixed(1)} KB`,
+      highlight: false,
+      stepNumber: 1,
+    }]);
+
+    try {
+      const formData = new FormData();
+      formData.append('pdf', file);
+
+      const res = await fetch(UPLOAD_URL, { method: 'POST', body: formData });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+        throw new Error(errData.error || `Server returned ${res.status}`);
+      }
+
+      const data = await res.json();
+      const count = data.redactions.length;
+      const preview = (text) => text.length > 500 ? text.slice(0, 500) + '…' : text;
+
+      setLogs([
+        {
+          label: `1. PDF Received — ${data.pageCount} page${data.pageCount !== 1 ? 's' : ''}`,
+          content: preview(data.originalText),
+          highlight: false,
+          stepNumber: 1,
+        },
+        {
+          label: `2. Redacted Content — ${count} item${count !== 1 ? 's' : ''} masked`,
+          content: preview(data.redactedText),
+          highlight: true,
+          stepNumber: 2,
+        },
+      ]);
+
+      const summary = count > 0
+        ? `Scanned **${file.name}** — ${count} item${count !== 1 ? 's' : ''} redacted:\n\n${data.redactions.map((r) => `• ${r.token}  ←  ${r.original}`).join('\n')}`
+        : `Scanned **${file.name}** — no PII detected.`;
+
+      setMessages((prev) => [...prev, { role: 'assistant', content: summary }]);
+    } catch (err) {
+      const msg = err.message || 'Failed to process PDF.';
+      setError(msg);
+      setLogs((prev) => [
+        ...prev,
+        { label: 'PDF Error', content: msg, highlight: false, stepNumber: 'error' },
       ]);
     } finally {
       setLoading(false);
@@ -269,6 +336,22 @@ export default function App() {
               loading ? 'border-gray-200 opacity-60' : 'border-gray-200 focus-within:border-emerald-400 focus-within:ring-2 focus-within:ring-emerald-100'
             }`}
           >
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={loading}
+              title="Upload PDF for redaction audit"
+              className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 disabled:opacity-40 hover:text-emerald-600 hover:bg-emerald-50 active:scale-95 transition-all flex-shrink-0"
+            >
+              <Paperclip size={15} />
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf"
+              className="hidden"
+              onChange={handleFileUpload}
+            />
             <input
               ref={inputRef}
               type="text"
@@ -332,8 +415,8 @@ export default function App() {
                 Submit a prompt containing a Saudi National ID to observe the three-stage
                 pipeline:
               </p>
-              <p className="text-gray-700 mt-3">  1. Raw prompt interception</p>
-              <p className="text-gray-700">  2. Luhn-validated ID redaction (tokenisation)</p>
+              <p className="text-gray-700 mt-3">  1. Raw prompt / PDF interception</p>
+              <p className="text-gray-700">  2. PII redaction (tokenisation)</p>
               <p className="text-gray-700">  3. Re-injection after LLM response</p>
               <p className="text-green-700 mt-5 animate-pulse">█</p>
             </div>
@@ -358,9 +441,11 @@ export default function App() {
                 />
               ))}
 
-              {!loading && logs.length === 3 && (
+              {!loading && logs.length >= 2 && (
                 <div className="text-xs text-green-700 mt-2 pt-3 border-t border-gray-800">
-                  $ Pipeline complete. Data re-injected client-side only. PII never traversed the network in plaintext.
+                  {logs.length === 2
+                    ? '$ PDF audit complete. PII never traversed the network in plaintext.'
+                    : '$ Pipeline complete. Data re-injected client-side only. PII never traversed the network in plaintext.'}
                 </div>
               )}
             </>
